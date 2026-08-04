@@ -1,0 +1,346 @@
+{
+  "name": "E-commerce Cart Recovery & Lapsed Customer Win-Back",
+  "nodes": [
+    {
+      "id": "trg-cart-scan",
+      "name": "Every 15min - Scan Abandoned Carts",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1120, 0],
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      }
+    },
+    {
+      "id": "pg-get-carts",
+      "name": "Get Abandoned Carts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-880, 0],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS cart_id, c.customer_email, c.cart_value, c.currency, c.touch_count, c.last_touch_at, c.is_first_time_customer FROM carts c WHERE c.status = 'abandoned' AND c.order_id IS NULL AND c.updated_at < NOW() - INTERVAL '1 hour' AND c.touch_count < 3 AND (c.last_touch_at IS NULL OR c.last_touch_at < NOW() - INTERVAL '20 hours') AND c.unsubscribed = false;"
+      }
+    },
+    {
+      "id": "set-dry-run",
+      "name": "Config: Dry Run Flag",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-880, 200],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "dry_run", "type": "boolean", "value": true }
+          ]
+        }
+      }
+    },
+    {
+      "id": "if-dry-run",
+      "name": "Dry Run Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-640, 100],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Config: Dry Run Flag').item.json.dry_run }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "noop-dry-run-log",
+      "name": "Log Would-Send (Dry Run Report)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [-400, 0],
+      "parameters": {}
+    },
+    {
+      "id": "switch-segment",
+      "name": "Segment: Value Tier x Touch Number",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [-400, 200],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "touch1_highvalue",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.touch_count }}", "rightValue": 0, "operator": { "type": "number", "operation": "equals" } },
+                  { "leftValue": "={{ $json.cart_value }}", "rightValue": 150, "operator": { "type": "number", "operation": "gte" } }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "touch1_standard",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.touch_count }}", "rightValue": 0, "operator": { "type": "number", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "touch2_incentive",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.touch_count }}", "rightValue": 1, "operator": { "type": "number", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "touch3_final",
+              "conditions": {
+                "conditions": [
+                  { "leftValue": "={{ $json.touch_count }}", "rightValue": 2, "operator": { "type": "number", "operation": "equals" } }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": { "fallbackOutput": "none" }
+      }
+    },
+    {
+      "id": "set-msg-t1hv",
+      "name": "Build Msg: High-Value First Touch",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 0],
+      "parameters": {
+        "assignments": { "assignments": [
+          { "name": "subject", "type": "string", "value": "You left something great in your cart" },
+          { "name": "template", "type": "string", "value": "cart_recovery_highvalue_t1" },
+          { "name": "discount_pct", "type": "number", "value": 0 }
+        ] }
+      }
+    },
+    {
+      "id": "set-msg-t1std",
+      "name": "Build Msg: Standard First Touch",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 150],
+      "parameters": {
+        "assignments": { "assignments": [
+          { "name": "subject", "type": "string", "value": "Still thinking it over?" },
+          { "name": "template", "type": "string", "value": "cart_recovery_standard_t1" },
+          { "name": "discount_pct", "type": "number", "value": 0 }
+        ] }
+      }
+    },
+    {
+      "id": "set-msg-t2",
+      "name": "Build Msg: Second Touch + Incentive",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 300],
+      "parameters": {
+        "assignments": { "assignments": [
+          { "name": "subject", "type": "string", "value": "Here's 10% off to finish your order" },
+          { "name": "template", "type": "string", "value": "cart_recovery_incentive_t2" },
+          { "name": "discount_pct", "type": "number", "value": 10 }
+        ] }
+      }
+    },
+    {
+      "id": "set-msg-t3",
+      "name": "Build Msg: Final Touch",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 450],
+      "parameters": {
+        "assignments": { "assignments": [
+          { "name": "subject", "type": "string", "value": "Last call - your cart expires soon" },
+          { "name": "template", "type": "string", "value": "cart_recovery_final_t3" },
+          { "name": "discount_pct", "type": "number", "value": 10 }
+        ] }
+      }
+    },
+    {
+      "id": "email-send",
+      "name": "Send Recovery Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [80, 200],
+      "parameters": {
+        "fromEmail": "orders@yourstore-demo.com",
+        "toEmail": "={{ $('Get Abandoned Carts').item.json.customer_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "={{ $json.template }} rendered with discount_pct={{ $json.discount_pct }}"
+      }
+    },
+    {
+      "id": "pg-log-touch",
+      "name": "Log Touch Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [320, 200],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE carts SET touch_count = touch_count + 1, last_touch_at = NOW(), last_template = '{{ $json.template }}' WHERE id = {{ $('Get Abandoned Carts').item.json.cart_id }};"
+      }
+    },
+    {
+      "id": "wh-order-placed",
+      "name": "Webhook: Order Placed",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-1120, 600],
+      "parameters": {
+        "path": "order-placed",
+        "httpMethod": "POST",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "pg-mark-converted",
+      "name": "Mark Cart Converted (Stop Sequence)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-880, 600],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE carts SET status = 'converted', order_id = '{{ $json.order_id }}' WHERE customer_email = '{{ $json.customer_email }}' AND status = 'abandoned';"
+      }
+    },
+    {
+      "id": "trg-winback-scan",
+      "name": "Daily - Scan Lapsed Customers",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1120, 850],
+      "parameters": {
+        "rule": { "interval": [{ "field": "days", "triggerAtHour": 9 }] }
+      }
+    },
+    {
+      "id": "pg-get-lapsed",
+      "name": "Get Customers Inactive 90+ Days",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-880, 850],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT customer_email, lifetime_value, last_order_at, favorite_category FROM customers WHERE last_order_at < NOW() - INTERVAL '90 days' AND unsubscribed = false AND (last_winback_sent_at IS NULL OR last_winback_sent_at < NOW() - INTERVAL '60 days');"
+      }
+    },
+    {
+      "id": "if-valid-lapsed",
+      "name": "Has Valid Email & Not Unsubscribed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-640, 850],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.customer_email }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "set-winback-tier",
+      "name": "Build Win-Back Offer (Tiered by LTV)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-400, 850],
+      "parameters": {
+        "assignments": { "assignments": [
+          { "name": "offer_pct", "type": "number", "value": "={{ $json.lifetime_value > 500 ? 20 : 15 }}" },
+          { "name": "subject", "type": "string", "value": "We miss you - here's something for your favorites" }
+        ] }
+      }
+    },
+    {
+      "id": "email-winback",
+      "name": "Send Win-Back Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [-160, 850],
+      "parameters": {
+        "fromEmail": "orders@yourstore-demo.com",
+        "toEmail": "={{ $json.customer_email }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "html": "Win-back offer: {{ $json.offer_pct }}% off, focused on {{ $json.favorite_category }}"
+      }
+    },
+    {
+      "id": "pg-log-winback",
+      "name": "Log Win-Back Touch",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [80, 850],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET last_winback_sent_at = NOW() WHERE customer_email = '{{ $json.customer_email }}';"
+      }
+    },
+    {
+      "id": "err-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [-1120, 1050],
+      "parameters": {}
+    },
+    {
+      "id": "slack-alert",
+      "name": "Alert Slack: Workflow Failed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [-880, 1050],
+      "parameters": {
+        "select": "channel",
+        "channelId": "#automation-alerts",
+        "text": "=Cart Recovery / Win-Back workflow failed.\\nNode: {{ $json.node?.name }}\\nError: {{ $json.error?.message }}\\nExecution: {{ $json.execution?.id }}"
+      }
+    }
+  ],
+  "connections": {
+    "Every 15min - Scan Abandoned Carts": { "main": [[{ "node": "Get Abandoned Carts", "type": "main", "index": 0 }, { "node": "Config: Dry Run Flag", "type": "main", "index": 0 }]] },
+    "Get Abandoned Carts": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
+    "Config: Dry Run Flag": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
+    "Dry Run Mode?": { "main": [[{ "node": "Log Would-Send (Dry Run Report)", "type": "main", "index": 0 }], [{ "node": "Segment: Value Tier x Touch Number", "type": "main", "index": 0 }]] },
+    "Segment: Value Tier x Touch Number": {
+      "main": [
+        [{ "node": "Build Msg: High-Value First Touch", "type": "main", "index": 0 }],
+        [{ "node": "Build Msg: Standard First Touch", "type": "main", "index": 0 }],
+        [{ "node": "Build Msg: Second Touch + Incentive", "type": "main", "index": 0 }],
+        [{ "node": "Build Msg: Final Touch", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Msg: High-Value First Touch": { "main": [[{ "node": "Send Recovery Email", "type": "main", "index": 0 }]] },
+    "Build Msg: Standard First Touch": { "main": [[{ "node": "Send Recovery Email", "type": "main", "index": 0 }]] },
+    "Build Msg: Second Touch + Incentive": { "main": [[{ "node": "Send Recovery Email", "type": "main", "index": 0 }]] },
+    "Build Msg: Final Touch": { "main": [[{ "node": "Send Recovery Email", "type": "main", "index": 0 }]] },
+    "Send Recovery Email": { "main": [[{ "node": "Log Touch Sent", "type": "main", "index": 0 }]] },
+    "Webhook: Order Placed": { "main": [[{ "node": "Mark Cart Converted (Stop Sequence)", "type": "main", "index": 0 }]] },
+    "Daily - Scan Lapsed Customers": { "main": [[{ "node": "Get Customers Inactive 90+ Days", "type": "main", "index": 0 }]] },
+    "Get Customers Inactive 90+ Days": { "main": [[{ "node": "Has Valid Email & Not Unsubscribed", "type": "main", "index": 0 }]] },
+    "Has Valid Email & Not Unsubscribed": { "main": [[{ "node": "Build Win-Back Offer (Tiered by LTV)", "type": "main", "index": 0 }]] },
+    "Build Win-Back Offer (Tiered by LTV)": { "main": [[{ "node": "Send Win-Back Email", "type": "main", "index": 0 }]] },
+    "Send Win-Back Email": { "main": [[{ "node": "Log Win-Back Touch", "type": "main", "index": 0 }]] },
+    "Error Trigger": { "main": [[{ "node": "Alert Slack: Workflow Failed", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": { "instanceId": "demo-portfolio-build" }
+}
