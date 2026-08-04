@@ -38,15 +38,48 @@ Three independent triggers feeding one recovery/re-engagement system:
 
 ## Setup
 1. Import `workflow.json` into n8n.
-2. Run `schema.sql` against a Postgres instance (dummy seed data included).
-3. Connect your own Postgres, SMTP/email, and Slack credentials.
+2. Run `schema.sql` then `migration_shopify_sync.sql` against Postgres (dummy
+   seed data + the column that links tracked carts to real Shopify checkouts).
+3. Connect a Shopify API credential (Admin API access token from a custom app,
+   scopes: checkouts, orders, customers, products, inventory, fulfillments),
+   your own Postgres, SMTP/email, and Slack credentials.
 4. Leave `dry_run = true` in the "Config: Dry Run Flag" node for at least one full
    cycle before flipping it to `false`.
 
 ## What would change for a real client
-- Cart/order source becomes a live Shopify/WooCommerce/custom-store API call
-  instead of a Postgres table (Postgres here stands in for "your store's data").
+- Shopify credential swaps to the client's own store/token; WooCommerce or a
+  custom store would swap the `Get Checkouts (Shopify)` node for that
+  platform's API instead.
 - Email sending swaps to the client's ESP (Klaviyo, SendGrid, Postmark, etc.) via
   their native node or HTTP Request.
 - Segmentation rules and copy get tuned to the client's actual price points and
   brand voice.
+
+## Debugging & Troubleshooting (runbook)
+
+General checklist before digging into a specific node:
+- Are all three Docker containers running? `docker ps` should show `n8n`,
+  `app-db`, `pgadmin` all "Up."
+- Are credentials selected on every node? Re-importing a workflow drops
+  credential bindings — they need to be reselected node by node.
+- For any Postgres node error, run the same query directly in pgAdmin's Query
+  Tool — Postgres's own error message is almost always clearer than n8n's.
+- Check n8n's **Executions** list (left sidebar) for the full error stack of
+  any past run.
+
+| Node | What it does | Common errors | Where to check | Fix |
+|---|---|---|---|---|
+| Every 15min - Scan Abandoned Carts | Kicks off the cart-recovery scan on a schedule | Doesn't fire at all | Workflow must be **Active** (top-right toggle); n8n container running | Activate workflow; `docker ps` |
+| Get Checkouts (Shopify) | Pulls abandoned checkouts from the real store via GraphQL | 401/403 auth error; GraphQL `errors` array (e.g. `undefinedField`); empty `edges` with no error | Node's Output → JSON tab | Auth error → recheck Shopify credential/token, reinstall app if scopes changed. `undefinedField` → field name wrong, adjust query. Empty with no error → data not populated yet (dev-store plan gating, or checkout not old enough) |
+| Split Out Checkouts | Turns the API response into one item per checkout | "No field to split" | Compare Input vs Output tab shape | Field path must match the actual response shape (`abandonedCheckouts.edges`) |
+| Filter: Still Abandoned + Has Email | Drops completed checkouts / checkouts with no email | Everything filtered out unexpectedly | Toggle filter off, inspect raw incoming item fields | Field names must match exactly (e.g. `customer.email`, not `email`) |
+| Upsert Cart Tracking Row | Writes/updates a state row per checkout in our own `carts` table | "column does not exist"; "null value violates not-null constraint"; connection refused | pgAdmin — run the same INSERT manually | Missing column → run `migration_shopify_sync.sql`. Null value → source item missing email/price. Connection refused → Postgres credential host must be `app-db`, not `localhost` |
+| Get Abandoned Carts | Pulls carts eligible for a touch (segmentation-ready) | Empty result even though rows exist | Run the same SELECT in pgAdmin, remove WHERE conditions one at a time | Row usually fails one condition — too new, already touched recently, or unsubscribed |
+| Config: Dry Run Flag / Dry Run Mode? | Single switch gating whether emails actually send | Branch seems flipped | Check the boolean value in the Set node | Set `dry_run` to `true`/`false` as intended |
+| Segment: Value Tier x Touch Number | Routes each cart to the right message variant | Item disappears (no output) | Compare the item's `touch_count`/`cart_value` against the Switch rules | `fallbackOutput: none` silently drops non-matching items — add a rule or a fallback branch |
+| Build Msg: * (Set nodes) | Builds subject/template/discount per segment | Wrong copy appears | Check which Switch branch actually fired | Usually a segmentation bug upstream, not this node |
+| Send Recovery Email / Send Win-Back Email | Sends the actual email | Fails until a real SMTP/email credential is attached; auth errors | Node's error output; email provider's send logs | Set up and select a real email credential |
+| Log Touch Sent / Log Win-Back Touch | Updates touch_count/timestamps so a cart/customer isn't re-touched too soon | Column errors | Same as other Postgres nodes | Confirm `schema.sql`/migration ran fully |
+| Webhook: Order Placed | Stops the recovery sequence the instant a real order lands | Real Shopify webhook can't reach local Docker | n8n's "Listen for test event" mode | Local testing: send a manual POST. Real use: needs an ngrok/Cloudflare tunnel exposing n8n publicly |
+| Mark Cart Converted | Flips a cart to converted, removing it from future scans | Same Postgres error classes | pgAdmin | Confirm migration ran, credential correct |
+| Error Trigger → Alert Slack: Workflow Failed | Catches any failure anywhere in the workflow and posts to Slack | Alert itself doesn't fire | Slack app permissions, channel name/ID | Reconnect Slack credential, confirm bot is in the target channel |

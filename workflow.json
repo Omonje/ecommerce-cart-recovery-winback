@@ -12,6 +12,118 @@
       }
     },
     {
+      "id": "note-sync",
+      "name": "Note: Shopify Sync",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1120, -420],
+      "parameters": {
+        "height": 180,
+        "width": 660,
+        "content": "## Real Shopify Sync\nPulls abandoned checkouts from the live dev store (GraphQL, `abandonedCheckouts`) and upserts them into our own `carts` table, which tracks touch_count/state.\n\n**If this returns empty:** not necessarily an error - dev stores can take time (or need a paid plan) before Shopify itself flags a checkout as abandoned. Check Shopify admin -> Orders -> Abandoned checkouts to confirm. Full troubleshooting: see README.md."
+      }
+    },
+    {
+      "id": "note-segment",
+      "name": "Note: Segmentation & Send",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-660, -640],
+      "parameters": {
+        "height": 200,
+        "width": 900,
+        "content": "## Segmentation, Dry-Run, and Send\nCarts eligible for a touch (touch_count < 3, spaced 20hrs+ apart) get routed by value/touch-number, messaged, and sent - unless `dry_run = true`, in which case nothing sends and results just log.\n\n**Flip dry_run to false only after reviewing at least one full dry-run cycle.** Send nodes need a real email credential attached before they'll work. See README.md troubleshooting table for per-node fixes."
+      }
+    },
+    {
+      "id": "note-webhook",
+      "name": "Note: Order Webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1120, 480],
+      "parameters": {
+        "height": 150,
+        "width": 500,
+        "content": "## Stop-on-Conversion\nReal order placed -> stops the recovery sequence for that customer immediately. Locally this can only be tested by sending a manual POST (n8n 'Listen for test event') - a real Shopify webhook needs this instance exposed via ngrok/Cloudflare Tunnel to reach it."
+      }
+    },
+    {
+      "id": "note-winback",
+      "name": "Note: Win-Back Branch",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1120, 730],
+      "parameters": {
+        "height": 150,
+        "width": 500,
+        "content": "## Win-Back Branch\nIndependent daily scan, reads the `customers` table (seeded via schema.sql), not tied to Shopify. Good branch to test while waiting on real Shopify data to age into 'abandoned' status."
+      }
+    },
+    {
+      "id": "note-errors",
+      "name": "Note: Error Alerting",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1120, 950],
+      "parameters": {
+        "height": 150,
+        "width": 500,
+        "content": "## Error Alerting\nAny failure anywhere in this workflow routes here and posts to Slack (node name, error message, execution ID). Needs a real Slack credential + channel to actually fire - see README.md."
+      }
+    },
+    {
+      "id": "http-get-checkouts",
+      "name": "Get Checkouts (Shopify)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1120, -220],
+      "parameters": {
+        "method": "GET",
+        "url": "https://blessing-systems.myshopify.com/admin/api/2024-10/checkouts.json?limit=50",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "shopifyApi",
+        "options": {}
+      }
+    },
+    {
+      "id": "split-checkouts",
+      "name": "Split Out Checkouts",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-880, -220],
+      "parameters": {
+        "fieldToSplitOut": "checkouts"
+      }
+    },
+    {
+      "id": "filter-still-abandoned",
+      "name": "Filter: Still Abandoned + Has Email",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [-640, -220],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.completed_at }}", "rightValue": "", "operator": { "type": "string", "operation": "empty" } },
+            { "leftValue": "={{ $json.email }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "pg-upsert-tracking",
+      "name": "Upsert Cart Tracking Row",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-400, -220],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO carts (shopify_checkout_id, customer_email, cart_value, currency, is_first_time_customer, status, updated_at) VALUES ('{{ $json.token }}', '{{ $json.email }}', {{ $json.total_price }}, '{{ $json.currency }}', {{ ($json.customer && $json.customer.orders_count > 0) ? 'false' : 'true' }}, 'abandoned', NOW()) ON CONFLICT (shopify_checkout_id) DO UPDATE SET cart_value = EXCLUDED.cart_value, updated_at = EXCLUDED.updated_at WHERE carts.status = 'abandoned';"
+      }
+    },
+    {
       "id": "pg-get-carts",
       "name": "Get Abandoned Carts",
       "type": "n8n-nodes-base.postgres",
@@ -316,7 +428,11 @@
     }
   ],
   "connections": {
-    "Every 15min - Scan Abandoned Carts": { "main": [[{ "node": "Get Abandoned Carts", "type": "main", "index": 0 }, { "node": "Config: Dry Run Flag", "type": "main", "index": 0 }]] },
+    "Every 15min - Scan Abandoned Carts": { "main": [[{ "node": "Get Checkouts (Shopify)", "type": "main", "index": 0 }]] },
+    "Get Checkouts (Shopify)": { "main": [[{ "node": "Split Out Checkouts", "type": "main", "index": 0 }]] },
+    "Split Out Checkouts": { "main": [[{ "node": "Filter: Still Abandoned + Has Email", "type": "main", "index": 0 }]] },
+    "Filter: Still Abandoned + Has Email": { "main": [[{ "node": "Upsert Cart Tracking Row", "type": "main", "index": 0 }]] },
+    "Upsert Cart Tracking Row": { "main": [[{ "node": "Get Abandoned Carts", "type": "main", "index": 0 }, { "node": "Config: Dry Run Flag", "type": "main", "index": 0 }]] },
     "Get Abandoned Carts": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
     "Config: Dry Run Flag": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
     "Dry Run Mode?": { "main": [[{ "node": "Log Would-Send (Dry Run Report)", "type": "main", "index": 0 }], [{ "node": "Segment: Value Tier x Touch Number", "type": "main", "index": 0 }]] },
