@@ -78,10 +78,13 @@
       "typeVersion": 4.2,
       "position": [-1120, -220],
       "parameters": {
-        "method": "GET",
-        "url": "https://blessing-systems.myshopify.com/admin/api/2024-10/checkouts.json?limit=50",
+        "method": "POST",
+        "url": "https://blessing-systems.myshopify.com/admin/api/2024-10/graphql.json",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "shopifyApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"{ abandonedCheckouts(first: 20) { edges { node { id totalPriceSet { shopMoney { amount currencyCode } } updatedAt customer { email numberOfOrders } } } } }\"\n}",
         "options": {}
       }
     },
@@ -92,12 +95,30 @@
       "typeVersion": 1,
       "position": [-880, -220],
       "parameters": {
-        "fieldToSplitOut": "checkouts"
+        "fieldToSplitOut": "data.abandonedCheckouts.edges"
+      }
+    },
+    {
+      "id": "set-normalize-checkout",
+      "name": "Normalize Checkout Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-760, -220],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "name": "token", "type": "string", "value": "={{ $json.node.id }}" },
+            { "name": "email", "type": "string", "value": "={{ $json.node.customer?.email }}" },
+            { "name": "total_price", "type": "string", "value": "={{ $json.node.totalPriceSet.shopMoney.amount }}" },
+            { "name": "currency", "type": "string", "value": "={{ $json.node.totalPriceSet.shopMoney.currencyCode }}" },
+            { "name": "is_first_time", "type": "boolean", "value": "={{ !($json.node.customer && $json.node.customer.numberOfOrders > 0) }}" }
+          ]
+        }
       }
     },
     {
       "id": "filter-still-abandoned",
-      "name": "Filter: Still Abandoned + Has Email",
+      "name": "Filter: Has Email",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [-640, -220],
@@ -105,7 +126,6 @@
         "conditions": {
           "options": { "caseSensitive": true, "typeValidation": "strict" },
           "conditions": [
-            { "leftValue": "={{ $json.completed_at }}", "rightValue": "", "operator": { "type": "string", "operation": "empty" } },
             { "leftValue": "={{ $json.email }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
           ],
           "combinator": "and"
@@ -120,7 +140,7 @@
       "position": [-400, -220],
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO carts (shopify_checkout_id, customer_email, cart_value, currency, is_first_time_customer, status, updated_at) VALUES ('{{ $json.token }}', '{{ $json.email }}', {{ $json.total_price }}, '{{ $json.currency }}', {{ ($json.customer && $json.customer.orders_count > 0) ? 'false' : 'true' }}, 'abandoned', NOW()) ON CONFLICT (shopify_checkout_id) DO UPDATE SET cart_value = EXCLUDED.cart_value, updated_at = EXCLUDED.updated_at WHERE carts.status = 'abandoned';"
+        "query": "INSERT INTO carts (shopify_checkout_id, customer_email, cart_value, currency, is_first_time_customer, status, updated_at) VALUES ('{{ $json.token }}', '{{ $json.email }}', {{ $json.total_price }}, '{{ $json.currency }}', {{ $json.is_first_time }}, 'abandoned', NOW()) ON CONFLICT (shopify_checkout_id) DO UPDATE SET cart_value = EXCLUDED.cart_value, updated_at = EXCLUDED.updated_at WHERE carts.status = 'abandoned';"
       }
     },
     {
@@ -430,8 +450,9 @@
   "connections": {
     "Every 15min - Scan Abandoned Carts": { "main": [[{ "node": "Get Checkouts (Shopify)", "type": "main", "index": 0 }]] },
     "Get Checkouts (Shopify)": { "main": [[{ "node": "Split Out Checkouts", "type": "main", "index": 0 }]] },
-    "Split Out Checkouts": { "main": [[{ "node": "Filter: Still Abandoned + Has Email", "type": "main", "index": 0 }]] },
-    "Filter: Still Abandoned + Has Email": { "main": [[{ "node": "Upsert Cart Tracking Row", "type": "main", "index": 0 }]] },
+    "Split Out Checkouts": { "main": [[{ "node": "Normalize Checkout Fields", "type": "main", "index": 0 }]] },
+    "Normalize Checkout Fields": { "main": [[{ "node": "Filter: Has Email", "type": "main", "index": 0 }]] },
+    "Filter: Has Email": { "main": [[{ "node": "Upsert Cart Tracking Row", "type": "main", "index": 0 }]] },
     "Upsert Cart Tracking Row": { "main": [[{ "node": "Get Abandoned Carts", "type": "main", "index": 0 }, { "node": "Config: Dry Run Flag", "type": "main", "index": 0 }]] },
     "Get Abandoned Carts": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
     "Config: Dry Run Flag": { "main": [[{ "node": "Dry Run Mode?", "type": "main", "index": 0 }]] },
