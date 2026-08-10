@@ -1,5 +1,7 @@
 # E-commerce Cart Recovery & Lapsed Customer Win-Back
 
+**Docs:** [Architecture](ARCHITECTURE.md) · [Business Case](BUSINESS-CASE.md) · [Deployment Notes](DEPLOYMENT.md)
+
 ## What this is
 A production-pattern automation, not a demo toy. It's a genericized rebuild of a
 renewal/re-engagement recycling system pattern (originally proven in a different
