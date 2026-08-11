@@ -36,3 +36,4 @@ INSERT INTO carts (customer_email, cart_value, is_first_time_customer, updated_a
 INSERT INTO customers (customer_email, lifetime_value, favorite_category, last_order_at) VALUES
 ('demo.lapsed1@example.com', 620.00, 'Outdoor Gear', NOW() - INTERVAL '95 days'),
 ('demo.lapsed2@example.com', 180.00, 'Home Decor', NOW() - INTERVAL '120 days');
+
