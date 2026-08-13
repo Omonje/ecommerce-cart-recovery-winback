@@ -17,8 +17,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -576,
-        -256
+        -656,
+        -224
       ]
     },
     {
@@ -37,8 +37,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -352,
-        -256
+        -432,
+        -224
       ],
       "credentials": {
         "shopifyApi": {
@@ -57,8 +57,8 @@
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
       "position": [
-        -128,
-        -256
+        -208,
+        -224
       ]
     },
     {
@@ -90,8 +90,8 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
       "position": [
-        96,
-        -256
+        240,
+        -224
       ]
     },
     {
@@ -105,8 +105,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        320,
-        -256
+        464,
+        -224
       ],
       "credentials": {
         "postgres": {
@@ -118,7 +118,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT c.id AS cart_id, c.customer_email, c.cart_value, c.currency, c.touch_count, c.last_touch_at, c.is_first_time_customer FROM carts c WHERE c.status = 'abandoned' AND c.order_id IS NULL AND c.updated_at < NOW() - INTERVAL '1 hour' AND c.touch_count < 3 AND (c.last_touch_at IS NULL OR c.last_touch_at < NOW() - INTERVAL '20 hours') AND c.unsubscribed = false;",
+        "query": "SELECT c.id AS cart_id, c.customer_email, c.cart_value::float8 AS cart_value, c.currency, c.touch_count, c.last_touch_at, c.is_first_time_customer FROM carts c WHERE c.status = 'abandoned' AND c.order_id IS NULL AND c.updated_at < NOW() - INTERVAL '1 hour' AND c.touch_count < 3 AND (c.last_touch_at IS NULL OR c.last_touch_at < NOW() - INTERVAL '20 hours') AND c.unsubscribed = false;",
         "options": {}
       },
       "id": "23392eb2-9af2-45f6-9b88-47a2c967b3d7",
@@ -126,8 +126,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        544,
-        -352
+        688,
+        -224
       ],
       "credentials": {
         "postgres": {
@@ -143,10 +143,12 @@
             {
               "name": "dry_run",
               "type": "boolean",
-              "value": true
+              "value": false,
+              "id": "4f2d5187-9d4d-41e3-a636-c6e7e3ef98da"
             }
           ]
         },
+        "includeOtherFields": true,
         "options": {}
       },
       "id": "4dea29ea-c876-46d0-bc3c-2bdc42aeefb3",
@@ -154,8 +156,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        544,
-        -160
+        912,
+        -224
       ]
     },
     {
@@ -165,16 +167,17 @@
             "caseSensitive": true,
             "leftValue": "",
             "typeValidation": "strict",
-            "version": 1
+            "version": 2
           },
           "conditions": [
             {
-              "leftValue": "={{ $('Config: Dry Run Flag').item.json.dry_run }}",
+              "leftValue": "={{ $json.dry_run }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
                 "operation": "true"
-              }
+              },
+              "id": "a18911e2-5e51-4153-8931-44699793443d"
             }
           ],
           "combinator": "and"
@@ -186,8 +189,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        768,
-        -256
+        1136,
+        -224
       ]
     },
     {
@@ -197,8 +200,8 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        992,
-        -368
+        1328,
+        -400
       ]
     },
     {
@@ -207,6 +210,12 @@
           "values": [
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.touch_count }}",
@@ -214,7 +223,8 @@
                     "operator": {
                       "type": "number",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "df338394-7711-4d17-87ce-6e91f673b40e"
                   },
                   {
                     "leftValue": "={{ $json.cart_value }}",
@@ -222,20 +232,21 @@
                     "operator": {
                       "type": "number",
                       "operation": "gte"
-                    }
+                    },
+                    "id": "708a5cc0-b7c6-422c-81f2-3f39bab8ab4c"
                   }
                 ],
-                "combinator": "and",
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 1
-                }
+                "combinator": "and"
               }
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.touch_count }}",
@@ -243,20 +254,21 @@
                     "operator": {
                       "type": "number",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "c6cdd4f7-b958-4657-b54a-d817a3c752a4"
                   }
                 ],
-                "combinator": "and",
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 1
-                }
+                "combinator": "and"
               }
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.touch_count }}",
@@ -264,20 +276,21 @@
                     "operator": {
                       "type": "number",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "378b3d7c-abe1-4be7-b430-64a916e62fc5"
                   }
                 ],
-                "combinator": "and",
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 1
-                }
+                "combinator": "and"
               }
             },
             {
               "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
                 "conditions": [
                   {
                     "leftValue": "={{ $json.touch_count }}",
@@ -285,20 +298,16 @@
                     "operator": {
                       "type": "number",
                       "operation": "equals"
-                    }
+                    },
+                    "id": "351eb399-624e-4651-8352-5ca3047c30d5"
                   }
                 ],
-                "combinator": "and",
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 1
-                }
+                "combinator": "and"
               }
             }
           ]
         },
+        "looseTypeValidation": true,
         "options": {
           "fallbackOutput": "none"
         }
@@ -308,8 +317,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        992,
-        -176
+        1328,
+        -112
       ]
     },
     {
@@ -340,8 +349,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1264,
-        -368
+        1584,
+        -400
       ]
     },
     {
@@ -372,8 +381,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1280,
-        -176
+        1584,
+        -208
       ]
     },
     {
@@ -404,8 +413,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1248,
-        0
+        1584,
+        -16
       ]
     },
     {
@@ -436,7 +445,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1296,
+        1584,
         176
       ]
     },
@@ -453,10 +462,16 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1616,
-        -256
+        1904,
+        -48
       ],
-      "webhookId": "e7b1098a-0aca-4226-bed6-6b2de1f76cf8"
+      "webhookId": "e7b1098a-0aca-4226-bed6-6b2de1f76cf8",
+      "credentials": {
+        "smtp": {
+          "id": "vrAdgbLZVjOamlpN",
+          "name": "SMTP account"
+        }
+      }
     },
     {
       "parameters": {
@@ -469,8 +484,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1872,
-        -336
+        2064,
+        -32
       ],
       "credentials": {
         "postgres": {
@@ -490,8 +505,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -576,
-        368
+        -112,
+        304
       ],
       "webhookId": "aaa128c4-2558-4abe-beac-9f1aa538f00d"
     },
@@ -506,8 +521,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        -352,
-        368
+        224,
+        304
       ],
       "credentials": {
         "postgres": {
@@ -531,8 +546,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        16,
-        784
+        -672,
+        640
       ]
     },
     {
@@ -546,8 +561,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        240,
-        784
+        -432,
+        656
       ],
       "credentials": {
         "postgres": {
@@ -584,8 +599,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        464,
-        784
+        -208,
+        656
       ]
     },
     {
@@ -611,8 +626,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        688,
-        784
+        48,
+        656
       ]
     },
     {
@@ -628,10 +643,16 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        912,
-        784
+        256,
+        656
       ],
-      "webhookId": "d0c2e8c7-d935-4065-a5eb-55c77a586ed1"
+      "webhookId": "d0c2e8c7-d935-4065-a5eb-55c77a586ed1",
+      "credentials": {
+        "smtp": {
+          "id": "vrAdgbLZVjOamlpN",
+          "name": "SMTP account"
+        }
+      }
     },
     {
       "parameters": {
@@ -644,8 +665,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1136,
-        784
+        464,
+        656
       ],
       "credentials": {
         "postgres": {
@@ -661,8 +682,8 @@
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
-        -592,
-        1136
+        1248,
+        960
       ]
     },
     {
@@ -677,10 +698,16 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
       "position": [
-        -320,
-        1136
+        1488,
+        960
       ],
-      "webhookId": "13d08831-4392-4a3c-9433-8b56417f9d28"
+      "webhookId": "13d08831-4392-4a3c-9433-8b56417f9d28",
+      "credentials": {
+        "slackApi": {
+          "id": "ZsoOBs2yYMN77zm8",
+          "name": "Danlex Slack account"
+        }
+      }
     },
     {
       "parameters": {
@@ -694,8 +721,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -848,
-        -480
+        -704,
+        -448
       ]
     },
     {
@@ -725,8 +752,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -816,
-        272
+        -592,
+        160
       ]
     },
     {
@@ -741,15 +768,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -784,
-        656
+        -1088,
+        544
       ]
     },
     {
       "parameters": {
         "content": "## Error Alerting\nAny failure anywhere in this workflow routes here and posts to Slack (node name, error message, execution ID). Needs a real Slack credential + channel to actually fire - see README.md.",
-        "height": 246,
-        "width": 804,
+        "height": 326,
+        "width": 852,
         "color": 2
       },
       "id": "052cad90-a162-4b9a-a028-fac43be7a007",
@@ -757,8 +784,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -800,
-        1008
+        992,
+        816
       ]
     },
     {
@@ -799,23 +826,22 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -16,
-        -256
+        16,
+        -224
       ]
     },
     {
       "parameters": {
-        "height": 160,
-        "width": 460,
-        "content": "## Email: hardcoded for demo\nShopify gates customer PII (email/name/phone) behind Shopify/Advanced/Plus plans (confirmed 2026-08-10, this dev store is below that tier). Checkout ID, price, and currency are still pulled live from Shopify. Email is filled in here explicitly rather than faking the whole cart row, see DEPLOYMENT.md."
+        "content": "## Email: hardcoded for demo\nShopify gates customer PII (email/name/phone) behind Shopify/Advanced/Plus plans (confirmed 2026-08-10, this dev store is below that tier). Checkout ID, price, and currency are still pulled live from Shopify. Email is filled in here explicitly rather than faking the whole cart row, see DEPLOYMENT.md.",
+        "width": 460
       },
       "id": "ef759633-c537-4d81-9c55-e3fa5d5a596e",
       "name": "Note: Email PII Workaround",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -16,
-        -420
+        -1008,
+        -1056
       ]
     }
   ],
@@ -871,11 +897,6 @@
             "node": "Get Abandoned Carts",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Config: Dry Run Flag",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -884,7 +905,7 @@
       "main": [
         [
           {
-            "node": "Dry Run Mode?",
+            "node": "Config: Dry Run Flag",
             "type": "main",
             "index": 0
           }
@@ -1098,6 +1119,6 @@
   },
   "pinData": {},
   "meta": {
-    "instanceId": "demo-portfolio-build"
+    "templateCredsSetupCompleted": true
   }
 }
