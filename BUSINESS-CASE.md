@@ -36,6 +36,11 @@ This system addresses both problems directly, described in full in
   a real purchase**, not on the next scheduled scan. This is the detail most
   cart-recovery builds skip, and it's usually the first thing that erodes a
   client's trust in an automated system.
+- **The final touch escalates to SMS instead of a third email.** Inbox
+  fatigue means a third "did you forget something?" email is easy to ignore;
+  a text at the last-call stage is a genuinely different channel, not just
+  another message in the same channel — and it's not something Klaviyo's
+  stock flows wire up by default.
 - **A separate lapsed-customer win-back** treats post-purchase churn as its
   own recoverable segment, tiered by lifetime value rather than a flat offer
   to everyone.

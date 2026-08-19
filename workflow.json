@@ -97,7 +97,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO carts (shopify_checkout_id, customer_email, cart_value, currency, is_first_time_customer, status, updated_at) VALUES ('{{ $json.token }}', '{{ $json.email }}', {{ $json.total_price }}, '{{ $json.currency }}', {{ $json.is_first_time }}, 'abandoned', NOW()) ON CONFLICT (shopify_checkout_id) DO UPDATE SET cart_value = EXCLUDED.cart_value, updated_at = EXCLUDED.updated_at WHERE carts.status = 'abandoned';",
+        "query": "INSERT INTO carts (shopify_checkout_id, customer_email, customer_phone, cart_value, currency, is_first_time_customer, status, updated_at) VALUES ('{{ $json.token }}', '{{ $json.email }}', '{{ $json.phone }}', {{ $json.total_price }}, '{{ $json.currency }}', {{ $json.is_first_time }}, 'abandoned', NOW()) ON CONFLICT (shopify_checkout_id) DO UPDATE SET cart_value = EXCLUDED.cart_value, updated_at = EXCLUDED.updated_at WHERE carts.status = 'abandoned';",
         "options": {}
       },
       "id": "342c5eba-cae2-45b9-8ebb-5c1ce090c743",
@@ -118,7 +118,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT c.id AS cart_id, c.customer_email, c.cart_value::float8 AS cart_value, c.currency, c.touch_count, c.last_touch_at, c.is_first_time_customer FROM carts c WHERE c.status = 'abandoned' AND c.order_id IS NULL AND c.updated_at < NOW() - INTERVAL '1 hour' AND c.touch_count < 3 AND (c.last_touch_at IS NULL OR c.last_touch_at < NOW() - INTERVAL '20 hours') AND c.unsubscribed = false;",
+        "query": "SELECT c.id AS cart_id, c.customer_email, c.customer_phone, c.cart_value::float8 AS cart_value, c.currency, c.touch_count, c.last_touch_at, c.is_first_time_customer FROM carts c WHERE c.status = 'abandoned' AND c.order_id IS NULL AND c.created_at < NOW() - INTERVAL '1 hour' AND c.touch_count < 3 AND (c.last_touch_at IS NULL OR c.last_touch_at < NOW() - INTERVAL '20 hours') AND c.unsubscribed = false;",
         "options": {}
       },
       "id": "23392eb2-9af2-45f6-9b88-47a2c967b3d7",
@@ -256,6 +256,15 @@
                       "operation": "equals"
                     },
                     "id": "c6cdd4f7-b958-4657-b54a-d817a3c752a4"
+                  },
+                  {
+                    "leftValue": "={{ $json.cart_value }}",
+                    "rightValue": 150,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    },
+                    "id": "9e1a4f3b-2c7d-4e6a-8b3f-5d9c1a7e4f2b"
                   }
                 ],
                 "combinator": "and"
@@ -339,6 +348,11 @@
               "name": "discount_pct",
               "type": "number",
               "value": 0
+            },
+            {
+              "name": "body_copy",
+              "type": "string",
+              "value": "We noticed you left something great in your cart. It's still available and ready whenever you're ready to complete your order."
             }
           ]
         },
@@ -371,6 +385,11 @@
               "name": "discount_pct",
               "type": "number",
               "value": 0
+            },
+            {
+              "name": "body_copy",
+              "type": "string",
+              "value": "Still thinking it over? Your cart is saved and ready whenever you'd like to finish checking out."
             }
           ]
         },
@@ -403,6 +422,11 @@
               "name": "discount_pct",
               "type": "number",
               "value": 10
+            },
+            {
+              "name": "body_copy",
+              "type": "string",
+              "value": "We saved your cart, and we'd love to have you back — here's 10% off to help you finish your order."
             }
           ]
         },
@@ -451,10 +475,10 @@
     },
     {
       "parameters": {
-        "fromEmail": "orders@yourstore-demo.com",
+        "fromEmail": "orders@northfield-outfitters-demo.com",
         "toEmail": "={{ $('Get Abandoned Carts').item.json.customer_email }}",
         "subject": "={{ $json.subject }}",
-        "html": "={{ $json.template }} rendered with discount_pct={{ $json.discount_pct }}",
+        "html": "=<!DOCTYPE html><html><body style='font-family:Arial,sans-serif;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;'><h2 style='margin:0 0 16px;'>{{ $json.subject }}</h2><p style='font-size:15px;line-height:1.5;'>{{ $json.body_copy }}</p><p style='margin:24px 0;'><a href='#' style='background:#1a1a1a;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px;'>Complete your order</a></p><hr style='border:none;border-top:1px solid #e0e0e0;margin:32px 0;'><p style='font-size:12px;color:#888;'>You're receiving this because you started checkout at Northfield Outfitters (demo store). Northfield Outfitters, 123 Demo Ave, Springfield, ST 00000.<br><a href='https://northfield-outfitters-demo.com/webhook/unsubscribe?email={{ $('Get Abandoned Carts').item.json.customer_email }}' style='color:#888;'>Unsubscribe from these emails</a></p></body></html>",
         "options": {}
       },
       "id": "865f0c30-b8dc-40ba-a111-95f2f647120b",
@@ -470,6 +494,27 @@
         "smtp": {
           "id": "vrAdgbLZVjOamlpN",
           "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "from": "+17372508034",
+        "to": "={{ $('Get Abandoned Carts').item.json.customer_phone }}",
+        "message": "={{ $json.subject }} — {{ $json.discount_pct }}% off if you finish now. Your cart closes soon."
+      },
+      "id": "7d3f9a2e-1c4b-4a8e-9f6d-2b5e8c1a4d7f",
+      "name": "Send Recovery SMS (Final Touch)",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1904,
+        176
+      ],
+      "credentials": {
+        "twilioApi": {
+          "id": "REPLACE_WITH_YOUR_TWILIO_CREDENTIAL_ID",
+          "name": "Twilio account"
         }
       }
     },
@@ -616,6 +661,11 @@
               "name": "subject",
               "type": "string",
               "value": "We miss you - here's something for your favorites"
+            },
+            {
+              "name": "body_copy",
+              "type": "string",
+              "value": "=It's been a while! As a thank you for being a customer, here's {{ $json.lifetime_value > 500 ? 20 : 15 }}% off on {{ $json.favorite_category }}."
             }
           ]
         },
@@ -632,10 +682,10 @@
     },
     {
       "parameters": {
-        "fromEmail": "orders@yourstore-demo.com",
+        "fromEmail": "orders@northfield-outfitters-demo.com",
         "toEmail": "={{ $('Has Valid Email & Not Unsubscribed').item.json.customer_email }}",
         "subject": "={{ $json.subject }}",
-        "html": "Win-back offer: {{ $json.offer_pct }}% off, focused on {{ $json.favorite_category }}",
+        "html": "=<!DOCTYPE html><html><body style='font-family:Arial,sans-serif;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;'><h2 style='margin:0 0 16px;'>{{ $json.subject }}</h2><p style='font-size:15px;line-height:1.5;'>{{ $json.body_copy }}</p><p style='margin:24px 0;'><a href='#' style='background:#1a1a1a;color:#fff;padding:12px 20px;text-decoration:none;border-radius:4px;'>Shop now</a></p><hr style='border:none;border-top:1px solid #e0e0e0;margin:32px 0;'><p style='font-size:12px;color:#888;'>You're receiving this because you're a Northfield Outfitters customer (demo store). Northfield Outfitters, 123 Demo Ave, Springfield, ST 00000.<br><a href='https://northfield-outfitters-demo.com/webhook/unsubscribe?email={{ $('Has Valid Email & Not Unsubscribed').item.json.customer_email }}' style='color:#888;'>Unsubscribe from these emails</a></p></body></html>",
         "options": {}
       },
       "id": "9c2160b6-4090-44f6-83bf-34f2570b0e31",
@@ -711,6 +761,89 @@
     },
     {
       "parameters": {
+        "httpMethod": "GET",
+        "path": "unsubscribe",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3c8e5a91-6f2d-4b7a-9e1c-8a4d2f6b9c3e",
+      "name": "Webhook: Unsubscribe",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        960
+      ],
+      "webhookId": "5b7e3a12-9c4f-4d6e-8a2b-1f7c9e4d3a6b"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE carts SET unsubscribed = true WHERE customer_email = '{{ $json.query.email }}';",
+        "options": {}
+      },
+      "id": "7a2f4c9e-3b6d-4e8a-9c1f-5d3e7a2b8c4f",
+      "name": "Mark Cart Rows Unsubscribed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        224,
+        960
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET unsubscribed = true WHERE customer_email = '{{ $('Webhook: Unsubscribe').item.json.query.email }}';",
+        "options": {}
+      },
+      "id": "9d1e6b3a-4c7f-4a9e-8b2d-6f4c1a9e7b3d",
+      "name": "Mark Customer Row Unsubscribed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        464,
+        960
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<html><body style='font-family:Arial,sans-serif;text-align:center;padding:60px 20px;color:#1a1a1a;'><h2>You're unsubscribed</h2><p>{{ $('Webhook: Unsubscribe').item.json.query.email }} won't receive further emails from us. If this was a mistake, contact support to resubscribe.</p></body></html>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "id": "2e5c8a4d-7b3f-4e9c-9a1d-3c6e9b4a7d2f",
+      "name": "Respond: Unsubscribe Confirmed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        960
+      ]
+    },
+    {
+      "parameters": {
         "content": "## Real Shopify Sync\nPulls abandoned checkouts from the live dev store (GraphQL, `abandonedCheckouts`) and upserts them into our own `carts` table, which tracks touch_count/state.\n\n**If this returns empty:** not necessarily an error - dev stores can take time (or need a paid plan) before Shopify itself flags a checkout as abandoned. Check Shopify admin -> Orders -> Abandoned checkouts to confirm. Full troubleshooting: see README.md.",
         "height": 788,
         "width": 2884,
@@ -774,6 +907,22 @@
     },
     {
       "parameters": {
+        "content": "## Unsubscribe Webhook\nHit when a recipient clicks the unsubscribe link in any email. Marks the email `unsubscribed = true` in both `carts` and `customers` — a real unsubscribe should stop cart-recovery AND win-back, not just whichever email they clicked from. Same local-testing constraint as the order webhook: needs ngrok/Cloudflare Tunnel to actually receive a real click from outside this machine. The link's domain in the email templates (`northfield-outfitters-demo.com`) is a placeholder — swap for the real production domain (or the current tunnel URL, for local testing) before this link actually works end to end.",
+        "height": 310,
+        "width": 900,
+        "color": 2
+      },
+      "id": "6f3a9d2e-4c8b-4e1a-9d6f-2b8e4c1a9d3f",
+      "name": "Note: Unsubscribe Webhook",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        816
+      ]
+    },
+    {
+      "parameters": {
         "content": "## Error Alerting\nAny failure anywhere in this workflow routes here and posts to Slack (node name, error message, execution ID). Needs a real Slack credential + channel to actually fire - see README.md.",
         "height": 326,
         "width": 852,
@@ -801,6 +950,11 @@
               "name": "email",
               "type": "string",
               "value": "blessingvirtualservices@gmail.com"
+            },
+            {
+              "name": "phone",
+              "type": "string",
+              "value": "+1XXXXXXXXXX"
             },
             {
               "name": "total_price",
@@ -832,11 +986,11 @@
     },
     {
       "parameters": {
-        "content": "## Email: hardcoded for demo\nShopify gates customer PII (email/name/phone) behind Shopify/Advanced/Plus plans (confirmed 2026-08-10, this dev store is below that tier). Checkout ID, price, and currency are still pulled live from Shopify. Email is filled in here explicitly rather than faking the whole cart row, see DEPLOYMENT.md.",
+        "content": "## Email & Phone: hardcoded for demo\nShopify gates customer PII (email/name/phone) behind Shopify/Advanced/Plus plans (confirmed 2026-08-10, this dev store is below that tier). Checkout ID, price, and currency are still pulled live from Shopify. Email and phone (phone added 2026-08-15 for the final-touch SMS escalation) are filled in here explicitly rather than faking the whole cart row, see DEPLOYMENT.md. Phone is set to the developer's own verified Twilio test number, not a real customer number.",
         "width": 460
       },
       "id": "ef759633-c537-4d81-9c55-e3fa5d5a596e",
-      "name": "Note: Email PII Workaround",
+      "name": "Note: Email & Phone PII Workaround",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1010,7 +1164,18 @@
       "main": [
         [
           {
-            "node": "Send Recovery Email",
+            "node": "Send Recovery SMS (Final Touch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Recovery SMS (Final Touch)": {
+      "main": [
+        [
+          {
+            "node": "Log Touch Sent",
             "type": "main",
             "index": 0
           }
@@ -1099,6 +1264,39 @@
         [
           {
             "node": "Alert Slack: Workflow Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Unsubscribe": {
+      "main": [
+        [
+          {
+            "node": "Mark Cart Rows Unsubscribed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Cart Rows Unsubscribed": {
+      "main": [
+        [
+          {
+            "node": "Mark Customer Row Unsubscribed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Customer Row Unsubscribed": {
+      "main": [
+        [
+          {
+            "node": "Respond: Unsubscribe Confirmed",
             "type": "main",
             "index": 0
           }

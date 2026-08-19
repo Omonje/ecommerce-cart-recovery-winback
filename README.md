@@ -7,7 +7,20 @@ A production-pattern automation, not a demo toy. It's a genericized rebuild of a
 renewal/re-engagement recycling system pattern (originally proven in a different
 industry, resold to multiple clients there) applied to e-commerce: recovering
 abandoned carts and re-engaging lapsed customers, with the same production
-discipline — dry-run mode, segmentation, stop-on-conversion, and failure alerting.
+discipline — dry-run mode, segmentation, stop-on-conversion, cross-channel
+escalation, and failure alerting.
+
+## Why not just use Klaviyo?
+If you're already on Shopify + Klaviyo, Klaviyo's abandoned-cart flow covers
+the basics, and this system isn't trying to replace that. It exists for two
+other cases: stores that aren't on Shopify + Klaviyo (WooCommerce, a custom
+stack, or Shopify without Klaviyo), and stores that need the layer most
+off-the-shelf flows don't wire together out of the box — real-time
+stop-on-conversion tied to an order webhook (not the next scheduled poll), a
+final touch that escalates to SMS instead of another email, and a separate
+lapsed-customer win-back tiered by lifetime value. Swapping the Shopify node
+for a WooCommerce or custom-store API call is a same-shape change, not a
+rebuild — see "What would change for a real client" below.
 
 ## Architecture
 Three independent triggers feeding one recovery/re-engagement system:
@@ -40,8 +53,10 @@ Three independent triggers feeding one recovery/re-engagement system:
 
 ## Setup
 1. Import `workflow.json` into n8n.
-2. Run `schema.sql` then `migration_shopify_sync.sql` against Postgres (dummy
-   seed data + the column that links tracked carts to real Shopify checkouts).
+2. Run `schema.sql`, then `migration_shopify_sync.sql`, then
+   `migration_add_customer_phone.sql` against Postgres (dummy seed data,
+   the column that links tracked carts to real Shopify checkouts, and the
+   phone column used by the final-touch SMS escalation).
 3. Connect a Shopify API credential (Admin API access token from a custom app,
    scopes: checkouts, orders, customers, products, inventory, fulfillments),
    your own Postgres, SMTP/email, and Slack credentials.
@@ -52,8 +67,17 @@ Three independent triggers feeding one recovery/re-engagement system:
 - Shopify credential swaps to the client's own store/token; WooCommerce or a
   custom store would swap the `Get Checkouts (Shopify)` node for that
   platform's API instead.
-- Email sending swaps to the client's ESP (Klaviyo, SendGrid, Postmark, etc.) via
-  their native node or HTTP Request.
+- **If the client already runs an email marketing platform** (Klaviyo,
+  Mailchimp, ActiveCampaign, etc.), the right move usually isn't replacing it
+  — it's keeping this system's segmentation, stop-on-conversion, and
+  SMS-escalation logic (the parts their platform's own flow builder can't
+  do) and swapping the raw SMTP send for a call to that platform's own
+  API/events endpoint to trigger the actual send. Their platform already
+  owns sender reputation, deliverability, and compliance tooling; no reason
+  to rebuild that from scratch when the client is already paying for it.
+- **If the client has no such platform**, raw SMTP (or SendGrid/Postmark for
+  better deliverability than raw SMTP alone) is the right call, which is
+  what this build demonstrates directly.
 - Segmentation rules and copy get tuned to the client's actual price points and
   brand voice.
 
@@ -81,7 +105,9 @@ General checklist before digging into a specific node:
 | Segment: Value Tier x Touch Number | Routes each cart to the right message variant | Item disappears (no output) | Compare the item's `touch_count`/`cart_value` against the Switch rules | `fallbackOutput: none` silently drops non-matching items — add a rule or a fallback branch |
 | Build Msg: * (Set nodes) | Builds subject/template/discount per segment | Wrong copy appears | Check which Switch branch actually fired | Usually a segmentation bug upstream, not this node |
 | Send Recovery Email / Send Win-Back Email | Sends the actual email | Fails until a real SMTP/email credential is attached; auth errors | Node's error output; email provider's send logs | Set up and select a real email credential |
+| Send Recovery SMS (Final Touch) | Escalates the last touch to SMS via Twilio | Auth error → credential not selected (re-importing drops it, same as other nodes); trial-account error → recipient not a Verified Caller ID; `last_template` ends up blank in Postgres after this branch fires | Node's error output for Twilio auth/trial errors; check the `carts` row's `last_template` column after a test run for the blank-value case | Select the Twilio credential; verify the recipient number under Twilio Console → Verified Caller IDs; if `last_template` is blank, the Twilio node isn't passing the incoming `template` field through to Log Touch Sent — confirm by checking this node's output data, and if so change `Log Touch Sent`'s query to read the value via the upstream node lookup instead of `$json.template` |
 | Log Touch Sent / Log Win-Back Touch | Updates touch_count/timestamps so a cart/customer isn't re-touched too soon | Column errors | Same as other Postgres nodes | Confirm `schema.sql`/migration ran fully |
 | Webhook: Order Placed | Stops the recovery sequence the instant a real order lands | Real Shopify webhook can't reach local Docker | n8n's "Listen for test event" mode | Local testing: send a manual POST. Real use: needs an ngrok/Cloudflare tunnel exposing n8n publicly |
 | Mark Cart Converted | Flips a cart to converted, removing it from future scans | Same Postgres error classes | pgAdmin | Confirm migration ran, credential correct |
 | Error Trigger → Alert Slack: Workflow Failed | Catches any failure anywhere in the workflow and posts to Slack | Alert itself doesn't fire | Slack app permissions, channel name/ID | Reconnect Slack credential, confirm bot is in the target channel |
+| Webhook: Unsubscribe → Mark Cart Rows Unsubscribed → Mark Customer Row Unsubscribed | Handles a recipient clicking "Unsubscribe" in any email; silences both tables | Link goes nowhere externally | Same as the order webhook — needs ngrok/Cloudflare Tunnel exposure to be reachable from outside this machine | Start a tunnel, update the placeholder domain in the email templates to match, re-test |

@@ -19,12 +19,16 @@ client engagement changes several things.
 ## What changes from this local setup
 
 - **Secrets never live in files.** Every credential in this project
-  (Shopify token, Postgres password, SMTP, Slack) belongs in n8n's built-in
-  credential store or environment variables injected at deploy time, never
-  committed to the repo or pasted into a SQL/config file. This project
-  briefly had a real Shopify token pasted into `schema.sql` during setup,
-  caught before it was committed, but it's the exact mistake this note
-  exists to prevent happening for a client where the stakes are real.
+  (Shopify token, Postgres password, SMTP, Slack, Twilio) belongs in n8n's
+  built-in credential store or environment variables injected at deploy
+  time, never committed to the repo or pasted into a SQL/config file. This
+  project briefly had a real Shopify token pasted into `schema.sql` during
+  setup, caught before it was committed, but it's the exact mistake this
+  note exists to prevent happening for a client where the stakes are real.
+- **Twilio uses an Auth Token for this demo** (full account access if it
+  ever leaks). A real client deployment should use a scoped API Key
+  instead, which can be limited to specific products and individually
+  revoked without rotating the whole account's credentials.
 - **Webhook exposure needs a real HTTPS endpoint.** Locally, the
   "Order Placed" webhook can only be hit with a manual test POST. In
   production it needs to be reachable at a real HTTPS URL, either n8n
