@@ -2,6 +2,22 @@
 
 **Docs:** [Architecture](ARCHITECTURE.md) · [Business Case](BUSINESS-CASE.md) · [Deployment Notes](DEPLOYMENT.md)
 
+
+**Video walkthrough:** [Watch the walkthrough on YouTube](https://youtu.be/uWqLXVScrWA)
+
+## Screenshots
+
+All records shown are test data.
+
+![The n8n workflow with its execution history.](docs/images/cart-recovery-workflow.png)
+*The n8n workflow with its execution history.*
+
+![Stop-on-conversion: after the order webhook fires, the cart row shows status converted with the order ID attached.](docs/images/stop-on-conversion-proof.png)
+*Stop-on-conversion: after the order webhook fires, the cart row shows status converted with the order ID attached.*
+
+![Unsubscribe flag set to true on the cart and customer records.](docs/images/unsubscribe-proof.png)
+*Unsubscribe flag set to true on the cart and customer records.*
+
 ## What this is
 A production-pattern automation, not a demo toy. It's a genericized rebuild of a
 renewal/re-engagement recycling system pattern (originally proven in a different
